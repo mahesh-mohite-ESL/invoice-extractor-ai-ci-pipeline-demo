@@ -87,3 +87,15 @@ def test_normalize_invoice_converts_every_field():
 def test_clean_invoice_number_keeps_leading_letters_that_resemble_the_label():
     assert clean_invoice_number("NOVA-2041") == "NOVA-2041"
     assert clean_invoice_number("No. NOVA-2041") == "NOVA-2041"
+
+
+def test_normalize_invoice_reads_numeric_dates_day_first_for_non_usd_invoices():
+    invoice = normalize_invoice(load_raw("bharat-inr"))
+    assert invoice.invoice_date == date(2026, 4, 3)
+    assert invoice.due_date == date(2026, 5, 3)
+
+
+def test_normalize_invoice_reads_numeric_dates_month_first_for_usd_invoices():
+    invoice = normalize_invoice(load_raw("acme-usd"))
+    assert invoice.invoice_date == date(2026, 11, 20)
+    assert invoice.due_date == date(2026, 12, 20)

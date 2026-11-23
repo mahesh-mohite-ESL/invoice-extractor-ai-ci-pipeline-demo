@@ -66,11 +66,12 @@ def clean_text(text: str) -> str:
 
 def normalize_invoice(raw: RawInvoice) -> Invoice:
     currency = normalize_currency(raw.currency)
+    day_first = currency != "USD"
     return Invoice(
         invoice_number=clean_invoice_number(raw.invoice_number),
         vendor_name=clean_text(raw.vendor_name),
-        invoice_date=parse_date(raw.invoice_date),
-        due_date=parse_date(raw.due_date),
+        invoice_date=parse_date(raw.invoice_date, day_first),
+        due_date=parse_date(raw.due_date, day_first),
         currency=currency,
         line_items=[
             LineItem(
