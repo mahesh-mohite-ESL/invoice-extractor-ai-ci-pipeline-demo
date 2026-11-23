@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Claude auto-fix: fix result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["fixed", "root_cause", "summary", "files"],
+  "properties": {
+    "fixed": {
+      "type": "boolean",
+      "description": "True only if the change is complete and lint and the full test suite pass."
+    },
+    "root_cause": {
+      "type": "string",
+      "description": "Two to four sentences explaining why the defect happened. If not fixed: what blocked you."
+    },
+    "summary": {
+      "type": "string",
+      "description": "Two to four sentences describing the change, for the pull request description."
+    },
+    "files": {
+      "type": "array",
+      "description": "Repository-relative paths (forward slashes) of the files you changed.",
+      "items": { "type": "string" }
+    }
+  }
+}

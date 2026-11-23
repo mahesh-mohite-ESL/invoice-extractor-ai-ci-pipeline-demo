@@ -1,0 +1,24 @@
+{
+  "sample_id": "nova-gbp",
+  "source": "seed",
+  "model": "",
+  "raw": {
+    "invoice_number": "NOVA-2041",
+    "vendor_name": "Nova Analytics Ltd",
+    "invoice_date": "5 November 2026",
+    "due_date": "5 December 2026",
+    "currency": "GBP",
+    "line_items": [
+      {
+        "description": "Data audit (days)",
+        "quantity": "3",
+        "unit_price": "400.00",
+        "amount": "1,200.00"
+      }
+    ],
+    "subtotal": "1,200.00",
+    "discount": "",
+    "tax": "240.00",
+    "total": "1,440.00"
+  }
+}

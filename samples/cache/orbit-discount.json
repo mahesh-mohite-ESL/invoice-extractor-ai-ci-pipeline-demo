@@ -1,0 +1,30 @@
+{
+  "sample_id": "orbit-discount",
+  "source": "seed",
+  "model": "",
+  "raw": {
+    "invoice_number": "OL-88310",
+    "vendor_name": "Orbit Logistics LLC",
+    "invoice_date": "Oct 28, 2026",
+    "due_date": "Nov 27, 2026",
+    "currency": "USD",
+    "line_items": [
+      {
+        "description": "Freight - pallet",
+        "quantity": "8",
+        "unit_price": "125.00",
+        "amount": "1,000.00"
+      },
+      {
+        "description": "Insurance",
+        "quantity": "1",
+        "unit_price": "80.00",
+        "amount": "80.00"
+      }
+    ],
+    "subtotal": "1,080.00",
+    "discount": "108.00",
+    "tax": "48.60",
+    "total": "1,020.60"
+  }
+}

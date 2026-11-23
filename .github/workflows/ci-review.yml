@@ -1,0 +1,127 @@
+# Build and test on every push to main and on every pull request; pull requests also get an
+# automated Claude code review whose blocking findings fail the "claude_review" check.
+#
+# Required secret: ANTHROPIC_API_KEY
+# Optional repository variables: REVIEW_MODEL, REVIEW_BUDGET_USD, REVIEW_FAIL_ON
+# To block merges, require the checks "build" and "claude_review" in a ruleset on main.
+
+name: CI and Claude review
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: python -m ruff check .
+
+      - name: Unit tests
+        run: python -m pytest --junitxml=test-results/junit.xml
+
+      - name: Workflow script tests
+        run: npm run test:autofix
+
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results
+          if-no-files-found: ignore
+
+  claude_review:
+    name: claude_review
+    needs: build
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+      statuses: write
+    env:
+      REVIEW_FAIL_ON: ${{ vars.REVIEW_FAIL_ON || 'critical,high' }}
+    steps:
+      # Pull requests from forks get no secrets. Fail with a clear message instead of skipping,
+      # so a required check can never be satisfied without a review.
+      - name: Check that the review can run
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::ANTHROPIC_API_KEY is not available. Add the repository secret, or (for a pull request from a fork) push the branch to this repository instead."
+            exit 1
+          fi
+
+      # The PR head itself is checked out (not the merge commit), so line numbers match the PR diff.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Claude Code CLI
+        run: npm install --no-audit --no-fund --prefix "$RUNNER_TEMP/claude-cli" @anthropic-ai/claude-code@latest
+
+      - name: Load prior review findings (dedup)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/pr-review/load-prior-findings.mjs
+
+      - name: Run Claude review (fresh session, structured output)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_PACKAGE_DIR: ${{ runner.temp }}/claude-cli/node_modules/@anthropic-ai/claude-code
+          CLAUDE_MODEL: ${{ vars.REVIEW_MODEL || 'claude-sonnet-5-5' }}
+          CLAUDE_MAX_BUDGET_USD: ${{ vars.REVIEW_BUDGET_USD || '2' }}
+        run: node scripts/pr-review/run-review.mjs
+
+      - name: Post findings to the pull request
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/pr-review/post-findings.mjs
+
+      - name: Upload review output
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-review
+          path: pr-review-output
+          if-no-files-found: ignore
+
+      - name: Block merge on blocking findings
+        if: ${{ !cancelled() }}
+        run: node scripts/pr-review/gate.mjs

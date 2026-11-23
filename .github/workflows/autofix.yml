@@ -1,0 +1,262 @@
+# Bug auto-fix: picks up issues labelled "claude-autofix", reproduces each with a failing test, lets
+# Claude fix it, verifies the fix and opens a pull request. Anything the automation cannot finish
+# safely is handed to a person (label "claude-needs-human").
+#
+# Three jobs with different rights:
+#   select   reads and labels issues; no Claude, no code execution
+#   fix      runs Claude and the tests it writes; holds NO token that can write to the repository.
+#            Its only product is a patch file.
+#   publish  fresh checkout; applies the patch, re-checks that it only touches app/ and tests/,
+#            pushes the branch and opens the pull request
+#
+# Required secrets: ANTHROPIC_API_KEY, AUTOFIX_TOKEN (fine-grained PAT or GitHub App token with
+#   Contents, Pull requests and Issues read/write; without it the pull request gets no checks)
+# Optional repository variables: AUTOFIX_MODEL, AUTOFIX_BUDGET_USD, AUTOFIX_MAX_CHANGED_LINES,
+#   AUTOFIX_MAX_RUNS (total number of issues the automation may process), AUTOFIX_HANDOVER_TO (GitHub login)
+#
+# To pause the automation, disable this workflow (Actions > Bug auto-fix > ... > Disable workflow).
+
+name: Bug auto-fix
+
+on:
+  issues:
+    types: [labeled]
+  schedule:
+    # Sweeper: picks up issues whose run was superseded and looks after open auto-fix pull requests.
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Issue number for a manual run (0 = pick the oldest labelled issue)
+        default: '0'
+      dry_run:
+        description: Dry run - log GitHub writes instead of doing them (Claude still runs and costs money)
+        type: boolean
+        default: false
+
+permissions: {}
+
+# One bug at a time. A queued run may be replaced by a newer one; nothing is lost because every
+# run picks the oldest unclaimed issue, not the issue that triggered it.
+concurrency:
+  group: autofix
+  cancel-in-progress: false
+
+env:
+  AUTOFIX_MODEL: ${{ vars.AUTOFIX_MODEL || 'claude-opus-5-5' }}
+  AUTOFIX_BUDGET_USD: ${{ vars.AUTOFIX_BUDGET_USD || '5' }}
+  AUTOFIX_MAX_CHANGED_LINES: ${{ vars.AUTOFIX_MAX_CHANGED_LINES || '300' }}
+  AUTOFIX_MAX_RUNS: ${{ vars.AUTOFIX_MAX_RUNS || '0' }}
+  AUTOFIX_HANDOVER_TO: ${{ vars.AUTOFIX_HANDOVER_TO }}
+  AUTOFIX_ISSUE: ${{ inputs.issue || '0' }}
+  AUTOFIX_DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+
+jobs:
+  select:
+    name: Select work
+    # Label events for other labels (including the ones this workflow adds) are ignored.
+    if: github.event_name != 'issues' || github.event.label.name == 'claude-autofix'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      statuses: read
+    outputs:
+      mode: ${{ steps.mode.outputs.mode }}
+      pr: ${{ steps.scan.outputs.fixupPr }}
+      issue: ${{ steps.pick.outputs.issue }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check open auto-fix pull requests
+        id: scan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/autofix/address-review.mjs
+
+      - name: Pick and claim an issue
+        id: pick
+        if: steps.scan.outputs.fixupPr == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/autofix/pick-bug.mjs
+
+      - name: Decide what this run does
+        id: mode
+        env:
+          FIXUP_PR: ${{ steps.scan.outputs.fixupPr }}
+          HAS_BUG: ${{ steps.pick.outputs.hasBug }}
+        run: |
+          if [ -n "$FIXUP_PR" ]; then mode=fixup; elif [ "$HAS_BUG" = "true" ]; then mode=bug; else mode=none; fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "This run: $mode"
+
+      - name: Hand the claimed issue to the next jobs
+        if: steps.mode.outputs.mode == 'bug'
+        uses: actions/upload-artifact@v4
+        with:
+          name: autofix-select
+          path: autofix-output
+          include-hidden-files: true
+
+  fix:
+    name: Reproduce and fix with Claude
+    needs: select
+    if: needs.select.outputs.mode != 'none'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    # Read-only on purpose: this job executes tests written by Claude from an untrusted bug report.
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      # Claude Code runs its Bash commands in a sandbox here (CLAUDE_CODE_SUBPROCESS_ENV_SCRUB in
+      # scripts/autofix/claude.mjs). The sandbox needs bubblewrap and socat, and Ubuntu 24.04 blocks
+      # the user namespaces bubblewrap uses until the AppArmor restriction is lifted.
+      - name: Install the tools the Claude Code sandbox needs
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bubblewrap socat
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          bwrap --ro-bind / / --dev /dev --proc /proc true && echo "bubblewrap works"
+
+      - name: Install Claude Code CLI
+        run: npm install --no-audit --no-fund --prefix "$RUNNER_TEMP/claude-cli" @anthropic-ai/claude-code@latest
+
+      - name: Get the claimed issue
+        if: needs.select.outputs.mode == 'bug'
+        uses: actions/download-artifact@v4
+        with:
+          name: autofix-select
+          path: autofix-output
+
+      - name: Reproduce and fix the bug with Claude
+        if: needs.select.outputs.mode == 'bug'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_PACKAGE_DIR: ${{ runner.temp }}/claude-cli/node_modules/@anthropic-ai/claude-code
+        run: node scripts/autofix/run-fix.mjs
+
+      - name: Address Claude review findings on the pull request
+        if: needs.select.outputs.mode == 'fixup'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_PACKAGE_DIR: ${{ runner.temp }}/claude-cli/node_modules/@anthropic-ai/claude-code
+          GH_TOKEN: ${{ github.token }}
+          FIXUP_PR: ${{ needs.select.outputs.pr }}
+        run: node scripts/autofix/address-review.mjs --run "$FIXUP_PR"
+
+      - name: Upload the result (patch, prompts, logs)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: autofix-fix
+          path: autofix-output
+          include-hidden-files: true
+          if-no-files-found: ignore
+
+  publish:
+    name: Open pull request or hand over
+    needs: [select, fix]
+    if: ${{ !cancelled() && needs.select.result == 'success' && needs.select.outputs.mode != 'none' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    env:
+      MODE: ${{ needs.select.outputs.mode }}
+    steps:
+      # Fresh checkout of the same commit: the scripts below are the ones on main, not files the fix job touched.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Get the fix job result
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: autofix-fix
+          path: ${{ runner.temp }}/autofix-fix
+
+      - name: Get the claimed issue
+        if: env.MODE == 'bug'
+        uses: actions/download-artifact@v4
+        with:
+          name: autofix-select
+          path: ${{ runner.temp }}/autofix-select
+
+      # Copied last, the files from the select job win: the fix job cannot change which issue this run is about.
+      - name: Merge the outputs
+        run: |
+          mkdir -p autofix-output
+          for dir in autofix-fix autofix-select; do
+            if [ -d "$RUNNER_TEMP/$dir" ]; then cp -rf "$RUNNER_TEMP/$dir/." autofix-output/; fi
+          done
+          ls -la autofix-output
+
+      - name: Record test cases on the issue
+        if: env.MODE == 'bug'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/autofix/create-test-cases.mjs
+
+      - name: Push the fix and open a pull request
+        if: env.MODE == 'bug'
+        env:
+          GH_TOKEN: ${{ secrets.AUTOFIX_TOKEN || github.token }}
+          HAS_AUTOFIX_TOKEN: ${{ secrets.AUTOFIX_TOKEN != '' }}
+        run: node scripts/autofix/open-pr.mjs
+
+      # Runs after failures too, so a claimed issue is never left without an owner.
+      - name: Hand over to a person if the fix is not complete
+        if: ${{ always() && env.MODE == 'bug' }}
+        env:
+          GH_TOKEN: ${{ secrets.AUTOFIX_TOKEN || github.token }}
+        run: node scripts/autofix/handover.mjs
+
+      - name: Push the review fix-up
+        if: env.MODE == 'fixup'
+        env:
+          GH_TOKEN: ${{ secrets.AUTOFIX_TOKEN || github.token }}
+          FIXUP_PR: ${{ needs.select.outputs.pr }}
+        run: node scripts/autofix/address-review.mjs --publish "$FIXUP_PR"
+
+      - name: Upload auto-fix output
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-autofix
+          path: autofix-output
+          include-hidden-files: true
+          if-no-files-found: ignore

@@ -1,0 +1,30 @@
+{
+  "sample_id": "pioneer-qty",
+  "source": "seed",
+  "model": "",
+  "raw": {
+    "invoice_number": "PF-5572",
+    "vendor_name": "Pioneer Fabrics Co.",
+    "invoice_date": "November 3, 2026",
+    "due_date": "December 3, 2026",
+    "currency": "USD",
+    "line_items": [
+      {
+        "description": "Cotton twill (metres)",
+        "quantity": "2.5",
+        "unit_price": "19.99",
+        "amount": "49.98"
+      },
+      {
+        "description": "Thread spool",
+        "quantity": "12",
+        "unit_price": "1.25",
+        "amount": "15.00"
+      }
+    ],
+    "subtotal": "64.98",
+    "discount": "",
+    "tax": "0.00",
+    "total": "64.98"
+  }
+}

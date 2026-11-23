@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Claude PR review result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "verdict", "findings"],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "Two to four sentences describing what the PR changes and the overall assessment."
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["approve", "comment", "request_changes"]
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["severity", "category", "file", "line", "title", "description", "suggestion"],
+        "properties": {
+          "severity": { "type": "string", "enum": ["critical", "high", "medium", "low", "info"] },
+          "category": {
+            "type": "string",
+            "enum": ["bug", "security", "performance", "test", "maintainability", "accessibility", "style"]
+          },
+          "file": { "type": "string", "description": "Repository-relative path using forward slashes." },
+          "line": { "type": "integer", "description": "Line number in the new version of the file. 0 if not line-specific." },
+          "title": { "type": "string", "description": "One short sentence naming the problem." },
+          "description": { "type": "string", "description": "Why it is a problem and how it fails." },
+          "suggestion": { "type": "string", "description": "Concrete fix. Empty string if none." }
+        }
+      }
+    }
+  }
+}

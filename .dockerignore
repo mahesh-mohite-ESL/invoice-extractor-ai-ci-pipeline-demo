@@ -1,0 +1,14 @@
+.venv
+.git
+.github
+__pycache__
+.pytest_cache
+.ruff_cache
+.env
+tests
+docs
+scripts
+tools
+node_modules
+autofix-output
+pr-review-output

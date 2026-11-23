@@ -1,0 +1,26 @@
+# Run once after creating the repository: creates the labels the auto-fix workflow uses.
+
+name: Setup labels
+
+on:
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  labels:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Create labels
+        run: |
+          gh label create bug --color d73a4a --description "Something is not working" --force
+          gh label create claude-autofix --color 1f6feb --description "Let Claude reproduce and fix this bug" --force
+          gh label create claude-in-progress --color fbca04 --description "Claude auto-fix is working on this" --force
+          gh label create claude-pr-open --color 0e8a16 --description "Claude auto-fix opened a pull request" --force
+          gh label create claude-needs-human --color b60205 --description "Claude auto-fix handed this to a person" --force
+          gh label create claude-fixup-done --color c5def5 --description "Claude already addressed review findings once" --force
+          gh label list

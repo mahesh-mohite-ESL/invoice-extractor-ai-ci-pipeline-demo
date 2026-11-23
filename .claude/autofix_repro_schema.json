@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Claude auto-fix: bug reproduction result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["reproducible", "reason", "test_files", "test_cases"],
+  "properties": {
+    "reproducible": {
+      "type": "boolean",
+      "description": "True only if you wrote at least one test that fails because of the reported bug."
+    },
+    "reason": {
+      "type": "string",
+      "description": "If reproducible: one or two sentences on what the failing test demonstrates. If not: why the bug could not be reproduced and what information a person would need."
+    },
+    "test_files": {
+      "type": "array",
+      "description": "Repository-relative paths (forward slashes) of the test files you created or changed.",
+      "items": { "type": "string" }
+    },
+    "test_cases": {
+      "type": "array",
+      "description": "One entry per behaviour a tester should verify for this bug, written for a manual tester.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "steps", "expected", "automated_test"],
+        "properties": {
+          "title": { "type": "string", "description": "Short test case title." },
+          "steps": { "type": "array", "items": { "type": "string" }, "description": "Ordered manual steps in the running service." },
+          "expected": { "type": "string", "description": "Expected result after the last step." },
+          "automated_test": { "type": "string", "description": "Name of the automated test that covers this case, or an empty string." }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.env
+.env.*
+node_modules/
+pr-review-output/
+autofix-output/
+test-results/

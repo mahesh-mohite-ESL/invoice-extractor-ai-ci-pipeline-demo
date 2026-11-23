@@ -1,0 +1,15 @@
+{
+  "invoice_number": "INV-10021",
+  "vendor_name": "Acme Cloud Services Inc.",
+  "invoice_date": "11/20/2026",
+  "due_date": "12/20/2026",
+  "currency": "USD",
+  "line_items": [
+    {"description": "Cloud hosting - November", "quantity": "1", "unit_price": "1,250.00", "amount": "1,250.00"},
+    {"description": "Support plan", "quantity": "2", "unit_price": "150.00", "amount": "300.00"}
+  ],
+  "subtotal": "1,550.00",
+  "discount": "",
+  "tax": "124.00",
+  "total": "1,674.00"
+}

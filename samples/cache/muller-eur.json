@@ -1,0 +1,30 @@
+{
+  "sample_id": "muller-eur",
+  "source": "seed",
+  "model": "",
+  "raw": {
+    "invoice_number": "RE-2026-0193",
+    "vendor_name": "Müller Maschinenbau GmbH",
+    "invoice_date": "12.11.2026",
+    "due_date": "12.12.2026",
+    "currency": "EUR",
+    "line_items": [
+      {
+        "description": "Wartung Fräsmaschine",
+        "quantity": "1",
+        "unit_price": "1.250,00",
+        "amount": "1.250,00"
+      },
+      {
+        "description": "Ersatzteile",
+        "quantity": "4",
+        "unit_price": "87,50",
+        "amount": "350,00"
+      }
+    ],
+    "subtotal": "1.600,00",
+    "discount": "",
+    "tax": "304,00",
+    "total": "1.904,00"
+  }
+}

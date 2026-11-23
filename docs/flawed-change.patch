@@ -1,0 +1,29 @@
+diff --git a/app/main.py b/app/main.py
+index cb0171e..802d617 100644
+--- a/app/main.py
++++ b/app/main.py
+@@ -83,6 +83,12 @@ def extract(sample_id: str, refresh: bool = False, extractor: Extractor = Depend
+     return ExtractionResult(sample_id=sample_id, source=source, raw=raw, invoice=invoice, warnings=validate_invoice(invoice))
+ 
+ 
++@app.get("/debug/cache/{name:path}")
++def debug_cache(name: str) -> FileResponse:
++    """Returns a cached extraction file, for troubleshooting."""
++    return FileResponse(CACHE_DIR / name)
++
++
+ @app.get("/")
+ def index() -> FileResponse:
+     return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
+diff --git a/app/validate.py b/app/validate.py
+index d5bebc9..5f4dc2a 100644
+--- a/app/validate.py
++++ b/app/validate.py
+@@ -35,4 +35,7 @@ def validate_invoice(invoice: Invoice) -> list[str]:
+     if expected_total != invoice.total:
+         warnings.append(f"Subtotal and tax give {_money(expected_total)}, but the total is {_money(invoice.total)}.")
+ 
++    if invoice.subtotal and float(invoice.tax) / float(invoice.subtotal) > 0.3:
++        warnings.append("Tax is more than 30% of the subtotal.")
++
+     return warnings

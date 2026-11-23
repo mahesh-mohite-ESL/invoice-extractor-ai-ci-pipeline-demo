@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Invoice extractor</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1c2330; --muted:#5b6575; --line:#d9dee6; --accent:#1f5fbf; --warn-bg:#fff4d6; --warn:#7a5200; --ok-bg:#e3f5e9; --ok:#1d6b3a; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12161d; --card:#1b212b; --text:#e6eaf0; --muted:#9aa5b5; --line:#2e3644; --accent:#7fb0ff; --warn-bg:#3d3212; --warn:#ffd97a; --ok-bg:#16361f; --ok:#8fdcaa; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:16px; border-bottom:1px solid var(--line); background:var(--card); }
+  h1 { margin:0 0 4px; font-size:20px; }
+  header p { margin:0; color:var(--muted); }
+  main { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; padding:16px; }
+  @media (max-width: 900px) { main { grid-template-columns:minmax(0,1fr); } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px; min-width:0; }
+  label { font-weight:600; display:block; margin-bottom:6px; }
+  select { width:100%; padding:8px; font:inherit; color:inherit; background:var(--bg); border:1px solid var(--line); border-radius:6px; }
+  iframe { width:100%; height:70vh; border:1px solid var(--line); border-radius:6px; margin-top:12px; background:#fff; }
+  table { width:100%; border-collapse:collapse; margin:8px 0 16px; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; overflow-wrap:anywhere; }
+  th { color:var(--muted); font-weight:600; width:34%; }
+  .items th { width:auto; }
+  .num { text-align:right; font-variant-numeric:tabular-nums; }
+  .raw { color:var(--muted); font-size:13px; }
+  .note { padding:8px 12px; border-radius:6px; margin:0 0 8px; }
+  .warn { background:var(--warn-bg); color:var(--warn); }
+  .ok { background:var(--ok-bg); color:var(--ok); }
+  h2 { font-size:16px; margin:16px 0 4px; }
+  h2:first-child { margin-top:0; }
+  a.button { display:inline-block; margin-top:8px; padding:8px 14px; border-radius:6px; background:var(--accent); color:var(--card); text-decoration:none; font-weight:600; }
+  .muted { color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Invoice extractor</h1>
+  <p>Pick a sample invoice and compare the PDF with the extracted fields. If a field is wrong, report it as a bug.</p>
+</header>
+<main>
+  <section class="card">
+    <label for="sample">Sample invoice</label>
+    <select id="sample"></select>
+    <iframe id="pdf" title="Invoice PDF"></iframe>
+  </section>
+  <section class="card" id="result" aria-live="polite"><p class="muted">Loading...</p></section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id)
+const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+let repoUrl = ''
+
+function row(label, value, raw) {
+  return `<tr><th>${esc(label)}</th><td>${esc(value ?? '(none)')}<div class="raw">printed: ${esc(raw || '(empty)')}</div></td></tr>`
+}
+
+async function show(id) {
+  $('pdf').src = `/samples/${encodeURIComponent(id)}.pdf`
+  $('result').innerHTML = '<p class="muted">Extracting...</p>'
+  const res = await fetch(`/extract/${encodeURIComponent(id)}`, { method: 'POST' })
+  const data = await res.json()
+  if (!res.ok) {
+    $('result').innerHTML = `<p class="note warn">${esc(data.detail || 'Extraction failed.')}</p>`
+    return
+  }
+  const inv = data.invoice, raw = data.raw
+  const warnings = data.warnings.length
+    ? data.warnings.map((w) => `<p class="note warn">${esc(w)}</p>`).join('')
+    : '<p class="note ok">No validation warnings.</p>'
+  const items = inv.line_items.map((it) => `<tr><td>${esc(it.description)}</td><td class="num">${esc(it.quantity)}</td><td class="num">${esc(it.unit_price)}</td><td class="num">${esc(it.amount)}</td></tr>`).join('')
+  const bug = repoUrl
+    ? `<a class="button" href="${esc(repoUrl)}/issues/new?template=bug.yml&title=${encodeURIComponent(`[${id}] `)}" target="_blank" rel="noopener">Report a bug</a>`
+    : ''
+  $('result').innerHTML = `
+    <h2>Validation</h2>${warnings}
+    <h2>Extracted fields</h2>
+    <table>
+      ${row('Invoice number', inv.invoice_number, raw.invoice_number)}
+      ${row('Vendor', inv.vendor_name, raw.vendor_name)}
+      ${row('Invoice date', inv.invoice_date, raw.invoice_date)}
+      ${row('Due date', inv.due_date, raw.due_date)}
+      ${row('Currency', inv.currency, raw.currency)}
+      ${row('Subtotal', inv.subtotal, raw.subtotal)}
+      ${row('Discount', inv.discount, raw.discount)}
+      ${row('Tax', inv.tax, raw.tax)}
+      ${row('Total', inv.total, raw.total)}
+    </table>
+    <h2>Line items</h2>
+    <table class="items"><tr><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th></tr>${items}</table>
+    <p class="muted">Source: ${esc(data.source)}</p>${bug}`
+}
+
+async function init() {
+  try { repoUrl = (await (await fetch('/config')).json()).repo_url || '' } catch { repoUrl = '' }
+  const samples = await (await fetch('/samples')).json()
+  $('sample').innerHTML = samples.map((s) => `<option value="${esc(s.id)}">${esc(s.title)}</option>`).join('')
+  $('sample').addEventListener('change', (e) => show(e.target.value))
+  if (samples.length) show(samples[0].id)
+  else $('result').innerHTML = '<p class="note warn">No sample invoices found. Run tools/make_samples.py.</p>'
+}
+init()
+</script>
+</body>
+</html>

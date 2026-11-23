@@ -1,0 +1,24 @@
+{
+  "sample_id": "zenith-inr",
+  "source": "seed",
+  "model": "",
+  "raw": {
+    "invoice_number": "ZC-2026-118",
+    "vendor_name": "Zenith Consulting Pvt. Ltd.",
+    "invoice_date": "14 Nov 2026",
+    "due_date": "14 Dec 2026",
+    "currency": "INR",
+    "line_items": [
+      {
+        "description": "Process review workshop",
+        "quantity": "2",
+        "unit_price": "25,000.00",
+        "amount": "50,000.00"
+      }
+    ],
+    "subtotal": "50,000.00",
+    "discount": "",
+    "tax": "9,000.00",
+    "total": "59,000.00"
+  }
+}

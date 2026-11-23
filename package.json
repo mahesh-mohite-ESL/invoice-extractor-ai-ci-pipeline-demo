@@ -1,0 +1,12 @@
+{
+  "name": "invoice-extractor-workflow-scripts",
+  "private": true,
+  "type": "module",
+  "description": "Node scripts used by the GitHub Actions workflows (PR review and bug auto-fix). The service itself is Python.",
+  "scripts": {
+    "test:autofix": "node --test scripts/autofix/issues.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
