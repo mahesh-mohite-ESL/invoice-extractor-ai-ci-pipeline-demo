@@ -83,6 +83,12 @@ def extract(sample_id: str, refresh: bool = False, extractor: Extractor = Depend
     return ExtractionResult(sample_id=sample_id, source=source, raw=raw, invoice=invoice, warnings=validate_invoice(invoice))
 
 
+@app.get("/debug/cache/{name:path}")
+def debug_cache(name: str) -> FileResponse:
+    """Returns a cached extraction file, for troubleshooting."""
+    return FileResponse(CACHE_DIR / name)
+
+
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html", media_type="text/html")

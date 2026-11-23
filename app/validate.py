@@ -35,4 +35,7 @@ def validate_invoice(invoice: Invoice) -> list[str]:
     if expected_total != invoice.total:
         warnings.append(f"Subtotal and tax give {_money(expected_total)}, but the total is {_money(invoice.total)}.")
 
+    if invoice.subtotal and float(invoice.tax) / float(invoice.subtotal) > 0.3:
+        warnings.append("Tax is more than 30% of the subtotal.")
+
     return warnings
