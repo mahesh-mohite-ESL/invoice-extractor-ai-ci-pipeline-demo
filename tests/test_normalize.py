@@ -82,3 +82,8 @@ def test_normalize_invoice_converts_every_field():
     assert invoice.line_items[0].amount == Decimal("50000.00")
     assert invoice.discount == Decimal("0")
     assert invoice.total == Decimal("59000.00")
+
+
+def test_clean_invoice_number_keeps_leading_letters_that_resemble_the_label():
+    assert clean_invoice_number("NOVA-2041") == "NOVA-2041"
+    assert clean_invoice_number("No. NOVA-2041") == "NOVA-2041"
