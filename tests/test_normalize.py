@@ -99,3 +99,8 @@ def test_normalize_invoice_reads_numeric_dates_month_first_for_usd_invoices():
     invoice = normalize_invoice(load_raw("acme-usd"))
     assert invoice.invoice_date == date(2026, 11, 20)
     assert invoice.due_date == date(2026, 12, 20)
+
+
+def test_parse_date_reads_hyphenated_dates_with_an_abbreviated_month():
+    assert parse_date("30-Oct-2025", day_first=True) == date(2025, 10, 30)
+    assert parse_date("30-Oct-2025", day_first=False) == date(2025, 10, 30)

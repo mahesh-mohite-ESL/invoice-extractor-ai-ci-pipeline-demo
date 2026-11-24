@@ -16,7 +16,7 @@ _CURRENCY_ALIASES = {
     "RS.": "INR",
 }
 
-_TEXT_DATE_FORMATS = ["%Y-%m-%d", "%d.%m.%Y", "%d %B %Y", "%d %b %Y", "%B %d, %Y", "%b %d, %Y"]
+_TEXT_DATE_FORMATS = ["%Y-%m-%d", "%d.%m.%Y", "%d %B %Y", "%d %b %Y", "%B %d, %Y", "%b %d, %Y", "%d-%b-%Y"]
 _NUMBER = re.compile(r"-?\d[\d.,]*")
 
 
