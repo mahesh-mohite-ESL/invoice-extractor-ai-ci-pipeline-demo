@@ -47,3 +47,53 @@ def test_index_page_is_served(client):
     response = client.get("/")
     assert response.status_code == 200
     assert "Invoice extractor" in response.text
+
+
+class FakeLiveExtractor:
+    """Stands in for ClaudeExtractor: returns a fixture instead of calling the API."""
+
+    def extract_pdf(self, pdf: bytes):
+        from tests.conftest import load_raw
+
+        return load_raw("zenith-inr")
+
+
+def upload(client, body: bytes, live=FakeLiveExtractor):
+    from app.main import app, get_live_extractor
+
+    app.dependency_overrides[get_live_extractor] = live
+    return client.post("/extract-upload", content=body, headers={"content-type": "application/pdf"})
+
+
+def test_upload_returns_the_extracted_invoice(client):
+    response = upload(client, b"%PDF-1.4 fake invoice")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["sample_id"] == "upload"
+    assert body["source"] == "claude"
+    assert body["invoice"]["total"] == "59000.00"
+    assert body["warnings"] == []
+
+
+def test_upload_rejects_a_file_that_is_not_a_pdf(client):
+    response = upload(client, b"PK this is a zip file")
+    assert response.status_code == 400
+    assert upload(client, b"").status_code == 400
+
+
+def test_upload_rejects_a_file_above_the_size_limit(client, monkeypatch):
+    monkeypatch.setattr("app.main.MAX_UPLOAD_BYTES", 1024)
+    assert upload(client, b"%PDF-" + b"0" * 1024).status_code == 413
+    assert upload(client, b"%PDF-" + b"0" * 100).status_code == 200
+
+
+def test_upload_without_an_api_key_is_503(client):
+    assert upload(client, b"%PDF-1.4 fake invoice", live=lambda: None).status_code == 503
+
+
+def test_upload_stores_nothing_in_samples(client):
+    from app.main import SAMPLES_DIR
+
+    before = sorted(path.name for path in SAMPLES_DIR.rglob("*"))
+    assert upload(client, b"%PDF-1.4 fake invoice").status_code == 200
+    assert sorted(path.name for path in SAMPLES_DIR.rglob("*")) == before

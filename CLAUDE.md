@@ -37,6 +37,7 @@ python tools/refresh_cache.py            # re-extract samples with Claude (needs
 - Total = subtotal − discount + tax.
 - Invoice numbers are kept exactly as printed, apart from a leading label (`No.`, `#`) and surrounding whitespace.
 - Sample ids become file names. Validate them with `SAMPLE_ID` before building a path.
+- Uploaded invoices (`POST /extract-upload`) are checked before Claude is called: at most `MAX_UPLOAD_BYTES`, and the content must start with `%PDF-`. They are held in memory only: never written to disk, never cached, never added to `samples/`.
 - Never log or return the API key, request headers or full PDF contents.
 - New behaviour ships with tests in the same PR. Do not add dependencies without a reason stated in the PR description.
 

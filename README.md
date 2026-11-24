@@ -32,6 +32,7 @@ Claude again.
 | `GET /samples` | List of sample invoices |
 | `GET /samples/{id}.pdf` | The PDF |
 | `POST /extract/{id}` | Raw extraction, normalised invoice and warnings |
+| `POST /extract-upload` | The same for your own invoice: the request body is the PDF (up to 5 MB). Always calls Claude, needs `ANTHROPIC_API_KEY`, stores nothing |
 | `GET /health` | Liveness check |
 
 The samples are synthetic. The service deliberately contains five bugs for the auto-fix workflow
