@@ -33,6 +33,11 @@
   h2:first-child { margin-top:0; }
   a.button { display:inline-block; margin-top:8px; padding:8px 14px; border-radius:6px; background:var(--accent); color:var(--card); text-decoration:none; font-weight:600; }
   .muted { color:var(--muted); }
+  .upload { margin-top:12px; padding-top:12px; border-top:1px solid var(--line); display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .upload label { flex-basis:100%; margin:0; }
+  .upload input { flex:1; min-width:0; font:inherit; color:inherit; }
+  button { padding:8px 14px; border:0; border-radius:6px; background:var(--accent); color:var(--card); font:inherit; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.6; cursor:default; }
 </style>
 </head>
 <body>
@@ -44,6 +49,11 @@
   <section class="card">
     <label for="sample">Sample invoice</label>
     <select id="sample"></select>
+    <div class="upload">
+      <label for="upload">Or upload your own invoice (PDF, up to 5 MB)</label>
+      <input type="file" id="upload" accept="application/pdf,.pdf">
+      <button type="button" id="upload-btn">Extract uploaded PDF</button>
+    </div>
     <iframe id="pdf" title="Invoice PDF"></iframe>
   </section>
   <section class="card" id="result" aria-live="polite"><p class="muted">Loading...</p></section>
@@ -60,8 +70,29 @@ function row(label, value, raw) {
 async function show(id) {
   $('pdf').src = `/samples/${encodeURIComponent(id)}.pdf`
   $('result').innerHTML = '<p class="muted">Extracting...</p>'
-  const res = await fetch(`/extract/${encodeURIComponent(id)}`, { method: 'POST' })
-  const data = await res.json()
+  render(await fetch(`/extract/${encodeURIComponent(id)}`, { method: 'POST' }), id)
+}
+
+async function showUpload() {
+  const file = $('upload').files[0]
+  if (!file) {
+    $('result').innerHTML = '<p class="note warn">Choose a PDF file first.</p>'
+    return
+  }
+  $('pdf').src = URL.createObjectURL(file)
+  $('result').innerHTML = '<p class="muted">Sending the file to Claude. This takes a few seconds...</p>'
+  $('upload-btn').disabled = true
+  try {
+    render(await fetch('/extract-upload', { method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: file }), 'upload')
+  } catch {
+    $('result').innerHTML = '<p class="note warn">The upload failed. Is the service running?</p>'
+  } finally {
+    $('upload-btn').disabled = false
+  }
+}
+
+async function render(res, id) {
+  const data = await res.json().catch(() => ({}))
   if (!res.ok) {
     $('result').innerHTML = `<p class="note warn">${esc(data.detail || 'Extraction failed.')}</p>`
     return
@@ -98,6 +129,7 @@ async function init() {
   const samples = await (await fetch('/samples')).json()
   $('sample').innerHTML = samples.map((s) => `<option value="${esc(s.id)}">${esc(s.title)}</option>`).join('')
   $('sample').addEventListener('change', (e) => show(e.target.value))
+  $('upload-btn').addEventListener('click', showUpload)
   if (samples.length) show(samples[0].id)
   else $('result').innerHTML = '<p class="note warn">No sample invoices found. Run tools/make_samples.py.</p>'
 }
